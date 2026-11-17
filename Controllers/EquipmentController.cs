@@ -9,6 +9,8 @@ using LabEquipmentApi.Data;
 using LabEquipmentApi.Domain;
 using LabEquipmentApi.Contracts.Equipment;
 using Mapster;
+using FluentValidation;
+using Equipment = LabEquipmentApi.Domain.Equipment;
 
 namespace LabEquipmentApi.Controllers
 {
@@ -18,9 +20,13 @@ namespace LabEquipmentApi.Controllers
     {
         private readonly LabDbContext _context;
 
-        public EquipmentController(LabDbContext context)
+        
+        private readonly IValidator<CreateEquipmentRequest> _createValidator;
+
+        public EquipmentController(LabDbContext context, IValidator<CreateEquipmentRequest> createValidator)
         {
             _context = context;
+            _createValidator = createValidator;
         }
 
         // GET: api/Equipment
@@ -77,13 +83,32 @@ namespace LabEquipmentApi.Controllers
 
         // POST: api/Equipment
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // POST: api/equipment
         [HttpPost]
-        public async Task<ActionResult<Equipment>> PostEquipment(Equipment equipment)
+        public async Task<ActionResult<Equipment>> PostEquipment(CreateEquipmentRequest request)
         {
+            var validationResult = await _createValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                foreach (var error in validationResult.Errors)
+                {
+                    ModelState.AddModelError(error.PropertyName, error.ErrorMessage);
+                }
+
+                return ValidationProblem(ModelState);
+            }
+
+            var equipment = new Equipment
+            {
+                Name = request.Name,
+                Room = request.Room,
+                IsAvailable = true
+            };
+
             _context.EquipmentItems.Add(equipment);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetEquipment", new { id = equipment.Id }, equipment);
+            return CreatedAtAction(nameof(GetEquipment), new { id = equipment.Id }, equipment);
         }
 
         // DELETE: api/Equipment/5
